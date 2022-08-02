@@ -1,4 +1,4 @@
-import { BlogPost } from "./../@types/schema.d";
+import type { BlogPost, PostPage } from "./../@types/schema.d";
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 
@@ -21,26 +21,22 @@ export default class NotionService {
     });
   }
 
-  private async getProperties(pages: any): Promise<any> {
-    return await Promise.all(
-      pages.map(async (page: any) => {
-        const [name, tags, description, updated, slug] = await Promise.all([
-          this.getPageProperty(page?.id, page?.properties.Name.id),
-          this.getPageProperty(page?.id, page?.properties.Tags.id),
-          this.getPageProperty(page?.id, page?.properties.Description.id),
-          this.getPageProperty(page?.id, page?.properties.Updated.id),
-          this.getPageProperty(page?.id, page?.properties.Slug.id),
-        ]);
+  private async getProperties(page: any): Promise<any> {
+    const [name, tags, description, updated, slug] = await Promise.all([
+      this.getPageProperty(page?.id, page?.properties.Name.id),
+      this.getPageProperty(page?.id, page?.properties.Tags.id),
+      this.getPageProperty(page?.id, page?.properties.Description.id),
+      this.getPageProperty(page?.id, page?.properties.Updated.id),
+      this.getPageProperty(page?.id, page?.properties.Slug.id),
+    ]);
 
-        return {
-          name,
-          tags,
-          description,
-          updated,
-          slug,
-        };
-      })
-    );
+    return {
+      name,
+      tags,
+      description,
+      updated,
+      slug,
+    };
   }
 
   async getPublishedBlogPosts(): Promise<BlogPost[]> {
@@ -57,18 +53,62 @@ export default class NotionService {
       },
       sorts: [
         {
-          property: "Created",
+          property: "Updated",
           direction: "descending",
         },
       ],
     });
 
-    const properties = await this.getProperties(response.results);
+    // const properties = await this.getProperties(response.results);
+    const properties = await Promise.all(
+      response.results.map(async (page: any) => {
+        return await this.getProperties(page);
+      })
+    );
 
     return response.results.map((page, index) => {
       // transform this response to a blog post
       return this.pageToPostTransformer(page, properties[index]);
     });
+  }
+
+  async getSingleBlogPost(slug: string): Promise<PostPage> {
+    let post, markdown;
+
+    const database = process.env.NOTION_BLOG_DATABASE_ID ?? "";
+    const response = await this.client.databases.query({
+      database_id: database,
+      filter: {
+        property: "Slug",
+        formula: {
+          string: {
+            equals: slug,
+          },
+        },
+      },
+      sorts: [
+        {
+          property: "Updated",
+          direction: "descending",
+        },
+      ],
+    });
+
+    if (!response.results[0]) {
+      throw "No results available";
+    }
+
+    const properties = await this.getProperties(response.results[0]);
+
+    const page = response.results[0];
+    const mdblocks = await this.n2m.pageToMarkdown(page.id);
+    markdown = this.n2m.toMarkdownString(mdblocks);
+    post = this.pageToPostTransformer(page, properties);
+
+    return {
+      post,
+      markdown,
+    };
   }
 
   // TODO: Create type/interface for page

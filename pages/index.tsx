@@ -1,6 +1,7 @@
 import type { GetStaticProps, InferGetStaticPropsType, NextPage } from "next";
 import Head from "next/head";
 import type { BlogPost } from "../@types/schema";
+import BlogCard from "../components/BlogCard";
 import NotionService from "../services/notion-service";
 
 export const getStaticProps: GetStaticProps = async (context) => {
@@ -32,12 +33,14 @@ const Home: NextPage = ({
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-center">
             <h1 className="font-extrabold text-xl md:text-4xl text-black text-center">
-              NotionBlog
+              Notion Blog
             </h1>
           </div>
-          {posts.map((post: BlogPost) => (
-            <p key={post.id}>Blog Post Component will go here: {post.title}</p>
-          ))}
+          <div className="mt-12 max-w-lg mx-auto grid gap-6 lg:grid-cols-2 lg:max-w-none">
+            {posts.map((post: BlogPost) => (
+              <BlogCard key={post.id} post={post} />
+            ))}
+          </div>
         </div>
       </main>
     </>
